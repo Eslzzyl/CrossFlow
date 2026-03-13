@@ -32,6 +32,7 @@ pub fn get_shared_dir(state: State<'_, AppState>) -> Result<Option<String>, Stri
 #[tauri::command]
 pub async fn start_server(
     port: Option<u16>,
+    password: Option<String>,
     state: State<'_, AppState>
 ) -> Result<ServerInfo, String> {
     // 检查是否已设置共享目录
@@ -39,7 +40,7 @@ pub async fn start_server(
         let shared_dir = state.shared_dir.lock().map_err(|e| e.to_string())?;
         shared_dir.as_ref().ok_or("Shared directory not set")?.clone()
     };
-    
+
     // 检查服务器是否已在运行
     {
         let server_handle = state.server_handle.lock().map_err(|e| e.to_string())?;
@@ -49,23 +50,29 @@ pub async fn start_server(
             return server_info.clone().ok_or("Server info not available".to_string());
         }
     }
-    
+
     // 查找可用端口
     let port = match port {
         Some(p) => p,
         None => find_available_port(8080).await.ok_or("No available port found")?,
     };
-    
+
     // 生成服务器信息
     let server_info = generate_server_info(port).ok_or("Failed to generate server info")?;
-    
+
+    // 保存密码到状态
+    {
+        let mut server_password = state.server_password.lock().map_err(|e| e.to_string())?;
+        *server_password = password.clone();
+    }
+
     // 启动服务器
     let handle = tokio::spawn(async move {
-        if let Err(e) = run_server(port, shared_dir).await {
+        if let Err(e) = run_server(port, shared_dir, password).await {
             eprintln!("Server error: {}", e);
         }
     });
-    
+
     // 保存服务器句柄和信息
     {
         let mut server_handle = state.server_handle.lock().map_err(|e| e.to_string())?;
@@ -75,7 +82,7 @@ pub async fn start_server(
         let mut server_info_guard = state.server_info.lock().map_err(|e| e.to_string())?;
         *server_info_guard = Some(server_info.clone());
     }
-    
+
     Ok(server_info)
 }
 

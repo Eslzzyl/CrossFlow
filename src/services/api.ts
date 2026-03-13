@@ -13,8 +13,8 @@ export const api = {
   },
 
   // 启动服务器
-  startServer: async (port?: number): Promise<ServerInfo> => {
-    return await invoke('start_server', { port });
+  startServer: async (port?: number, password?: string): Promise<ServerInfo> => {
+    return await invoke('start_server', { port, password });
   },
 
   // 停止服务器
@@ -26,7 +26,7 @@ export const api = {
   getServerStatus: async (): Promise<ServerStatus> => {
     const serverInfo = await invoke<ServerInfo | null>('get_server_status');
     const sharedDir = await invoke<string | null>('get_shared_dir');
-    
+
     return {
       isRunning: !!serverInfo,
       serverInfo: serverInfo || undefined,

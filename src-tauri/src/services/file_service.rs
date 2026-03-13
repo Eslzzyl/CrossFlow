@@ -170,6 +170,19 @@ impl FileService {
     pub fn get_save_path(&self, relative_path: &str) -> Result<PathBuf, FileServiceError> {
         self.sanitize_path(relative_path)
     }
+
+    /// 删除文件或目录
+    pub fn delete_path(&self, relative_path: &str) -> Result<(), FileServiceError> {
+        let full_path = self.sanitize_path(relative_path)?;
+
+        if full_path.is_dir() {
+            std::fs::remove_dir_all(&full_path)?;
+        } else {
+            std::fs::remove_file(&full_path)?;
+        }
+
+        Ok(())
+    }
 }
 
 /// 格式化文件大小

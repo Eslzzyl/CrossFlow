@@ -41,11 +41,11 @@ export function useServer() {
   }, [refreshStatus]);
 
   // 启动服务器
-  const startServer = useCallback(async (port?: number): Promise<ServerInfo> => {
+  const startServer = useCallback(async (port?: number, password?: string): Promise<ServerInfo> => {
     setLoading(true);
     setError(null);
     try {
-      const serverInfo = await api.startServer(port);
+      const serverInfo = await api.startServer(port, password);
       await refreshStatus();
       return serverInfo;
     } catch (err) {

@@ -22,4 +22,5 @@ export interface ServerStatus {
   isRunning: boolean;
   serverInfo?: ServerInfo;
   sharedDir?: string;
+  password?: string;
 }

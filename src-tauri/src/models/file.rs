@@ -28,6 +28,7 @@ pub struct AppState {
     pub shared_dir: std::sync::Mutex<Option<PathBuf>>,
     pub server_handle: std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
     pub server_info: std::sync::Mutex<Option<ServerInfo>>,
+    pub server_password: std::sync::Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -36,6 +37,7 @@ impl AppState {
             shared_dir: std::sync::Mutex::new(None),
             server_handle: std::sync::Mutex::new(None),
             server_info: std::sync::Mutex::new(None),
+            server_password: std::sync::Mutex::new(None),
         }
     }
 }

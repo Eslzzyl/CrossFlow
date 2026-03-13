@@ -2,11 +2,11 @@ use crate::services::file_service::FileService;
 use axum::{
     body::Body,
     extract::{Multipart, Path, Query, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 #[derive(Deserialize)]
@@ -225,6 +225,134 @@ pub async fn upload_file_handler(
     Json(serde_json::json!({
         "success": true,
         "files": uploaded_files
+    })).into_response()
+}
+
+/// 删除文件或目录
+pub async fn delete_file_handler(
+    State(file_service): State<Arc<FileService>>,
+    Query(query): Query<ListFilesQuery>,
+) -> impl IntoResponse {
+    let path = query.path.unwrap_or_default();
+
+    if path.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Path is required"
+            }))
+        ).into_response();
+    }
+
+    match file_service.delete_path(&path) {
+        Ok(_) => Json(serde_json::json!({
+            "success": true,
+            "message": "Deleted successfully"
+        })).into_response(),
+        Err(e) => {
+            let status = match e {
+                crate::services::file_service::FileServiceError::PathNotAllowed(_) => StatusCode::FORBIDDEN,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+
+            (status, Json(serde_json::json!({
+                "success": false,
+                "error": e.to_string()
+            }))).into_response()
+        }
+    }
+}
+
+// ========== 认证相关 ==========
+
+#[derive(Debug, Clone)]
+pub struct AuthConfig {
+    pub password: Option<String>,
+}
+
+impl AuthConfig {
+    pub fn new(password: Option<String>) -> Self {
+        Self { password }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.password.is_some()
+    }
+
+    pub fn verify(&self, token: &str) -> bool {
+        if let Some(ref pwd) = self.password {
+            // 简单的 token 验证：token = "Bearer " + password 的 base64
+            use base64::{Engine as _, engine::general_purpose};
+            let expected = format!("Bearer {}", general_purpose::STANDARD.encode(pwd));
+            token == expected
+        } else {
+            true
+        }
+    }
+
+    pub fn generate_token(&self) -> Option<String> {
+        use base64::{Engine as _, engine::general_purpose};
+        self.password.as_ref().map(|pwd| format!("Bearer {}", general_purpose::STANDARD.encode(pwd)))
+    }
+}
+
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    password: String,
+}
+
+#[derive(Serialize)]
+pub struct AuthCheckResponse {
+    require_auth: bool,
+    authenticated: bool,
+}
+
+/// 检查认证状态
+pub async fn auth_check_handler(
+    State(auth_config): State<Arc<AuthConfig>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let token = headers
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let authenticated = !auth_config.is_enabled() || auth_config.verify(token);
+
+    Json(AuthCheckResponse {
+        require_auth: auth_config.is_enabled(),
+        authenticated,
+    })
+}
+
+/// 登录验证
+pub async fn auth_login_handler(
+    State(auth_config): State<Arc<AuthConfig>>,
+    Json(req): Json<LoginRequest>,
+) -> impl IntoResponse {
+    if let Some(ref expected_pwd) = auth_config.password {
+        if req.password == *expected_pwd {
+            if let Some(token) = auth_config.generate_token() {
+                return Json(serde_json::json!({
+                    "success": true,
+                    "token": token
+                })).into_response();
+            }
+        }
+
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Invalid password"
+            }))
+        ).into_response();
+    }
+
+    Json(serde_json::json!({
+        "success": true,
+        "message": "No password required"
     })).into_response()
 }
 

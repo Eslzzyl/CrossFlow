@@ -6,16 +6,17 @@
 }
 
 :root {
-  --primary-color: #667eea;
-  --primary-dark: #5a67d8;
-  --secondary-color: #764ba2;
-  --success-color: #48bb78;
-  --danger-color: #f56565;
-  --warning-color: #ed8936;
-  --bg-color: #f7fafc;
+  --primary-color: #2563eb;
+  --primary-dark: #1d4ed8;
+  --primary-light: #3b82f6;
+  --secondary-color: #0ea5e9;
+  --success-color: #16a34a;
+  --danger-color: #dc2626;
+  --warning-color: #f59e0b;
+  --bg-color: #f1f5f9;
   --card-bg: #ffffff;
-  --text-primary: #2d3748;
-  --text-secondary: #718096;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
   --border-color: #e2e8f0;
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -35,26 +36,6 @@ body {
   flex-direction: column;
 }
 
-/* 头部 */
-.app-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-  color: white;
-  padding: 24px;
-  text-align: center;
-  box-shadow: var(--shadow);
-}
-
-.app-header h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.app-header p {
-  opacity: 0.9;
-  font-size: 0.875rem;
-}
-
 /* 主内容区 */
 .app-main {
   flex: 1;
@@ -62,6 +43,7 @@ body {
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
+  padding-top: 32px;
 }
 
 /* 卡片 */
@@ -101,13 +83,14 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+  background: var(--primary-color);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
 }
 
 .btn-secondary {
@@ -126,7 +109,7 @@ body {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #e53e3e;
+  background: #b91c1c;
 }
 
 .btn-full {
@@ -204,7 +187,7 @@ body {
 
 .status-dot.active {
   background: var(--success-color);
-  box-shadow: 0 0 0 4px rgba(72, 187, 120, 0.2);
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.2);
 }
 
 .status-dot.inactive {
@@ -295,10 +278,10 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: #fff5f5;
-  border: 1px solid #feb2b2;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
   border-radius: 8px;
-  color: #c53030;
+  color: #dc2626;
   font-size: 0.875rem;
   margin-bottom: 16px;
 }
