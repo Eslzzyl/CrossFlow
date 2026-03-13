@@ -551,6 +551,110 @@
             margin-bottom: 16px;
         }
 
+        /* 文件预览模态框 */
+        #previewModal {
+            z-index: 3000;
+            padding: 20px;
+        }
+
+        .preview-container {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            max-width: 95vw;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .preview-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: all 0.2s;
+        }
+
+        .preview-close:hover {
+            background: rgba(0, 0, 0, 0.7);
+            transform: scale(1.1);
+        }
+
+        .preview-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 300px;
+            min-height: 200px;
+            background: #000;
+        }
+
+        .preview-content img {
+            max-width: 90vw;
+            max-height: 80vh;
+            object-fit: contain;
+        }
+
+        .preview-content video {
+            max-width: 90vw;
+            max-height: 80vh;
+            outline: none;
+        }
+
+        .preview-content pre {
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow: auto;
+            padding: 24px;
+            background: #1f2937;
+            color: #e5e7eb;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .preview-info {
+            padding: 12px 20px;
+            background: #f8fafc;
+            border-top: 1px solid var(--border-color);
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .preview-loading {
+            color: white;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .preview-loading .spinner {
+            width: 32px;
+            height: 32px;
+            border-color: rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            margin: 0;
+        }
+
         /* 响应式 */
         @media (max-width: 600px) {
             body {
@@ -592,6 +696,15 @@
             <input type="password" class="password-input" id="passwordInput" placeholder="输入密码">
             <div class="modal-error" id="passwordError"></div>
             <button class="btn btn-primary" onclick="verifyPassword()" style="width: 100%;">验证</button>
+        </div>
+    </div>
+
+    <!-- 文件预览模态框 -->
+    <div class="modal-overlay" id="previewModal" style="display: none;" onclick="closePreviewOnBackground(event)">
+        <div class="preview-container" onclick="event.stopPropagation()">
+            <button class="preview-close" onclick="closePreview()">×</button>
+            <div class="preview-content" id="previewContent"></div>
+            <div class="preview-info" id="previewInfo"></div>
         </div>
     </div>
 
@@ -774,7 +887,10 @@
                     <div class="file-actions">
                         ${file.is_dir
                             ? `<button class="btn btn-secondary" onclick="loadFiles('${escapeHtml(file.path)}')">打开</button>`
-                            : `<a href="/api/download/${encodeURIComponent(file.path)}" class="btn btn-primary" download>下载</a>`
+                            : `
+                                ${canPreview(file.name) ? `<button class="btn btn-secondary btn-sm" onclick='openPreview({"name": "${escapeHtml(file.name)}", "path": "${escapeHtml(file.path)}", "size": ${file.size || 0}})'>预览</button>` : ''}
+                                <a href="/api/download/${encodeURIComponent(file.path)}" class="btn btn-primary" download>下载</a>
+                              `
                         }
                         <button class="btn btn-danger btn-sm" onclick="deleteFile('${escapeHtml(file.path)}', '${escapeHtml(file.name)}')">删除</button>
                     </div>
@@ -1059,6 +1175,192 @@
                 showToast(`上传失败: ${item.name}`, 'error');
             }
         }
+
+        // ========== 文件预览功能 ==========
+
+        // 支持的预览文件类型
+        const PREVIEW_TYPES = {
+            image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'],
+            video: ['mp4', 'webm', 'ogg'],  // 仅浏览器原生支持
+            text: ['txt', 'md', 'json', 'xml', 'yaml', 'yml', 'js', 'ts', 'jsx', 'tsx',
+                   'html', 'htm', 'css', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'hpp',
+                   'rb', 'php', 'swift', 'kt', 'scala', 'r', 'pl', 'sh', 'bash', 'zsh',
+                   'vim', 'sql', 'log', 'conf', 'config', 'ini', 'properties', 'env']
+        };
+
+        // 检查文件是否可预览
+        function canPreview(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            return PREVIEW_TYPES.image.includes(ext) ||
+                   PREVIEW_TYPES.video.includes(ext) ||
+                   PREVIEW_TYPES.text.includes(ext);
+        }
+
+        // 获取文件预览类型
+        function getPreviewType(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            if (PREVIEW_TYPES.image.includes(ext)) return 'image';
+            if (PREVIEW_TYPES.video.includes(ext)) return 'video';
+            if (PREVIEW_TYPES.text.includes(ext)) return 'text';
+            return null;
+        }
+
+        // 打开预览
+        async function openPreview(file) {
+            const previewType = getPreviewType(file.name);
+            if (!previewType) {
+                showToast('该文件类型不支持预览', 'error');
+                return;
+            }
+
+            const modal = document.getElementById('previewModal');
+            const content = document.getElementById('previewContent');
+            const info = document.getElementById('previewInfo');
+
+            // 显示模态框和加载状态
+            modal.style.display = 'flex';
+            content.innerHTML = '<div class="preview-loading"><div class="spinner"></div>加载中...</div>';
+            info.textContent = file.name;
+
+            try {
+                if (previewType === 'image') {
+                    await openImagePreview(file, content);
+                } else if (previewType === 'video') {
+                    await openVideoPreview(file, content);
+                } else if (previewType === 'text') {
+                    await openTextPreview(file, content);
+                }
+            } catch (error) {
+                content.innerHTML = `<div style="color: white; padding: 40px;">加载失败: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        // 图片预览
+        async function openImagePreview(file, content) {
+            return new Promise((resolve, reject) => {
+                const img = document.createElement('img');
+                img.src = `/api/preview/${encodeURIComponent(file.path)}`;
+                img.alt = file.name;
+
+                // 添加认证头（通过设置请求头的方式）
+                if (authToken) {
+                    fetch(img.src, { headers: { 'Authorization': authToken } })
+                        .then(response => {
+                            if (response.ok) {
+                                return response.blob();
+                            }
+                            throw new Error('Failed to load image');
+                        })
+                        .then(blob => {
+                            img.src = URL.createObjectURL(blob);
+                            content.innerHTML = '';
+                            content.appendChild(img);
+                            resolve();
+                        })
+                        .catch(reject);
+                } else {
+                    img.onload = () => {
+                        content.innerHTML = '';
+                        content.appendChild(img);
+                        resolve();
+                    };
+                    img.onerror = () => reject(new Error('图片加载失败'));
+                }
+            });
+        }
+
+        // 视频预览
+        async function openVideoPreview(file, content) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            const mimeTypes = {
+                'mp4': 'video/mp4',
+                'webm': 'video/webm',
+                'ogg': 'video/ogg'
+            };
+            const mimeType = mimeTypes[ext] || 'video/mp4';
+
+            const video = document.createElement('video');
+            video.controls = true;
+            video.autoplay = true;
+            video.style.maxWidth = '100%';
+            video.style.maxHeight = '100%';
+
+            // 视频使用直接的 URL，浏览器会自动处理 Range 请求
+            const videoUrl = `/api/preview/${encodeURIComponent(file.path)}`;
+
+            // 如果有认证 token，我们需要先获取视频内容
+            if (authToken) {
+                // 使用 fetch 获取视频流
+                video.src = videoUrl;
+                // 设置视频请求头需要通过 Service Worker 或代理，这里简化处理
+                // 实际使用时视频可能需要特殊处理认证
+            } else {
+                video.src = videoUrl;
+            }
+
+            content.innerHTML = '';
+            content.appendChild(video);
+
+            // 添加错误处理
+            video.onerror = () => {
+                content.innerHTML = '<div style="color: white; padding: 40px;">视频加载失败</div>';
+            };
+        }
+
+        // 文本预览
+        async function openTextPreview(file, content) {
+            try {
+                const response = await fetch(`/api/preview/${encodeURIComponent(file.path)}`, {
+                    headers: getHeaders()
+                });
+
+                if (response.status === 401) {
+                    isAuthenticated = false;
+                    showPasswordModal();
+                    throw new Error('需要重新认证');
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const pre = document.createElement('pre');
+                    const code = document.createElement('code');
+                    code.textContent = result.content;
+                    pre.appendChild(code);
+                    content.innerHTML = '';
+                    content.appendChild(pre);
+                } else {
+                    throw new Error(result.error || '预览失败');
+                }
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        // 关闭预览
+        function closePreview() {
+            const modal = document.getElementById('previewModal');
+            const content = document.getElementById('previewContent');
+            modal.style.display = 'none';
+            content.innerHTML = ''; // 清理内容，停止视频播放
+        }
+
+        // 点击背景关闭预览
+        function closePreviewOnBackground(event) {
+            if (event.target.id === 'previewModal') {
+                closePreview();
+            }
+        }
+
+        // ESC 键关闭预览
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const previewModal = document.getElementById('previewModal');
+                if (previewModal.style.display === 'flex') {
+                    closePreview();
+                }
+            }
+        });
 
         // 获取文件图标
         function getFileIcon(filename) {

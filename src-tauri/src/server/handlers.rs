@@ -356,6 +356,248 @@ pub async fn auth_login_handler(
     })).into_response()
 }
 
+/// 预览文件
+/// GET /api/preview/{path}
+/// 支持图片、视频（含Range请求）、文本文件的预览
+pub async fn preview_file_handler(
+    State(file_service): State<Arc<FileService>>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    const MAX_TEXT_SIZE: u64 = 10 * 1024 * 1024; // 10MB
+
+    match file_service.get_file_path(&path) {
+        Ok(file_path) => {
+            let mime_type = mime_guess::from_path(&file_path)
+                .first_or_octet_stream()
+                .to_string();
+
+            // 判断文件类型
+            let is_image = mime_type.starts_with("image/");
+            let is_video = mime_type.starts_with("video/");
+            let is_text = mime_type.starts_with("text/")
+                || mime_type == "application/json"
+                || mime_type == "application/xml"
+                || mime_type == "application/javascript"
+                || mime_type == "application/typescript";
+
+            if is_text {
+                // 文本文件：读取内容返回 JSON
+                match tokio::fs::metadata(&file_path).await {
+                    Ok(metadata) => {
+                        if metadata.len() > MAX_TEXT_SIZE {
+                            return (
+                                StatusCode::PAYLOAD_TOO_LARGE,
+                                Json(serde_json::json!({
+                                    "success": false,
+                                    "error": "File too large for preview (max 10MB)"
+                                }))
+                            ).into_response();
+                        }
+                    }
+                    Err(e) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(serde_json::json!({
+                                "success": false,
+                                "error": format!("Failed to read file metadata: {}", e)
+                            }))
+                        ).into_response();
+                    }
+                }
+
+                match tokio::fs::read_to_string(&file_path).await {
+                    Ok(content) => {
+                        Json(serde_json::json!({
+                            "success": true,
+                            "content": content,
+                            "mime_type": mime_type
+                        })).into_response()
+                    }
+                    Err(e) => {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(serde_json::json!({
+                                "success": false,
+                                "error": format!("Failed to read file: {}", e)
+                            }))
+                        ).into_response()
+                    }
+                }
+            } else if is_image || is_video {
+                // 图片/视频文件：支持 Range 请求
+                match tokio::fs::metadata(&file_path).await {
+                    Ok(metadata) => {
+                        let file_size = metadata.len();
+
+                        // 检查是否有 Range 请求头
+                        let range_header = headers
+                            .get(header::RANGE)
+                            .and_then(|v| v.to_str().ok());
+
+                        if let Some(range) = range_header {
+                            // 解析 Range 头 (格式: bytes=start-end)
+                            if let Some(range_val) = range.strip_prefix("bytes=") {
+                                let parts: Vec<&str> = range_val.split('-').collect();
+                                if parts.len() == 2 {
+                                    let start = parts[0].parse::<u64>().unwrap_or(0);
+                                    let end = if parts[1].is_empty() {
+                                        file_size - 1
+                                    } else {
+                                        parts[1].parse::<u64>().unwrap_or(file_size - 1)
+                                    };
+
+                                    if start > end || start >= file_size {
+                                        return (
+                                            StatusCode::RANGE_NOT_SATISFIABLE,
+                                            format!("Range not satisfiable")
+                                        ).into_response();
+                                    }
+
+                                    let actual_end = end.min(file_size - 1);
+                                    let content_length = actual_end - start + 1;
+
+                                    // 读取指定范围的内容
+                                    match read_file_range(&file_path, start, content_length).await {
+                                        Ok(content) => {
+                                            Response::builder()
+                                                .status(StatusCode::PARTIAL_CONTENT)
+                                                .header(header::CONTENT_TYPE, mime_type)
+                                                .header(
+                                                    header::CONTENT_RANGE,
+                                                    format!("bytes {}-{}/{}", start, actual_end, file_size),
+                                                )
+                                                .header(header::CONTENT_LENGTH, content_length)
+                                                .header(header::ACCEPT_RANGES, "bytes")
+                                                .body(Body::from(content))
+                                                .unwrap()
+                                        }
+                                        Err(e) => {
+                                            (
+                                                StatusCode::INTERNAL_SERVER_ERROR,
+                                                format!("Failed to read file range: {}", e)
+                                            ).into_response()
+                                        }
+                                    }
+                                } else {
+                                    // 返回完整文件
+                                    match tokio::fs::read(&file_path).await {
+                                        Ok(content) => {
+                                            Response::builder()
+                                                .status(StatusCode::OK)
+                                                .header(header::CONTENT_TYPE, mime_type)
+                                                .header(header::CONTENT_LENGTH, file_size)
+                                                .header(header::ACCEPT_RANGES, "bytes")
+                                                .body(Body::from(content))
+                                                .unwrap()
+                                        }
+                                        Err(e) => {
+                                            (
+                                                StatusCode::INTERNAL_SERVER_ERROR,
+                                                format!("Failed to read file: {}", e)
+                                            ).into_response()
+                                        }
+                                    }
+                                }
+                            } else {
+                                // 返回完整文件
+                                match tokio::fs::read(&file_path).await {
+                                    Ok(content) => {
+                                        Response::builder()
+                                            .status(StatusCode::OK)
+                                            .header(header::CONTENT_TYPE, mime_type)
+                                            .header(header::CONTENT_LENGTH, file_size)
+                                            .header(header::ACCEPT_RANGES, "bytes")
+                                            .body(Body::from(content))
+                                            .unwrap()
+                                    }
+                                    Err(e) => {
+                                        (
+                                            StatusCode::INTERNAL_SERVER_ERROR,
+                                            format!("Failed to read file: {}", e)
+                                        ).into_response()
+                                    }
+                                }
+                            }
+                        } else {
+                            // 无 Range 请求，返回完整文件
+                            match tokio::fs::read(&file_path).await {
+                                Ok(content) => {
+                                    Response::builder()
+                                        .status(StatusCode::OK)
+                                        .header(header::CONTENT_TYPE, mime_type)
+                                        .header(header::CONTENT_LENGTH, file_size)
+                                        .header(header::ACCEPT_RANGES, "bytes")
+                                        .body(Body::from(content))
+                                        .unwrap()
+                                }
+                                Err(e) => {
+                                    (
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        format!("Failed to read file: {}", e)
+                                    ).into_response()
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to read file metadata: {}", e)
+                        ).into_response()
+                    }
+                }
+            } else {
+                // 不支持的文件类型
+                (
+                    StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": "Unsupported file type for preview"
+                    }))
+                ).into_response()
+            }
+        }
+        Err(e) => {
+            let status = match e {
+                crate::services::file_service::FileServiceError::PathNotAllowed(_) => StatusCode::FORBIDDEN,
+                _ => StatusCode::NOT_FOUND,
+            };
+
+            (status, Json(serde_json::json!({
+                "success": false,
+                "error": e.to_string()
+            }))).into_response()
+        }
+    }
+}
+
+/// 读取文件的指定范围
+async fn read_file_range(
+    path: &std::path::Path,
+    start: u64,
+    length: u64,
+) -> Result<Vec<u8>, std::io::Error> {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncSeekExt;
+
+    let mut file = tokio::fs::File::open(path).await?;
+    file.seek(std::io::SeekFrom::Start(start)).await?;
+
+    let mut buffer = vec![0u8; length as usize];
+    let mut total_read = 0;
+
+    while total_read < length as usize {
+        match file.read(&mut buffer[total_read..]).await? {
+            0 => break, // EOF
+            n => total_read += n,
+        }
+    }
+
+    buffer.truncate(total_read);
+    Ok(buffer)
+}
+
 /// Web UI 页面
 pub async fn web_ui_handler() -> impl IntoResponse {
     Html(include_str!("web_ui.html"))

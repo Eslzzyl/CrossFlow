@@ -46,6 +46,7 @@ pub fn create_routes(file_service: Arc<FileService>, password: Option<String>) -
     let protected_routes = Router::new()
         .route("/api/files", get(handlers::list_files_handler))
         .route("/api/download/{*path}", get(handlers::download_file_handler))
+        .route("/api/preview/{*path}", get(handlers::preview_file_handler))
         .route("/api/upload", post(handlers::upload_file_handler))
         .route("/api/delete", delete(handlers::delete_file_handler))
         .route_layer(middleware::from_fn_with_state(auth_config.clone(), auth_middleware))
