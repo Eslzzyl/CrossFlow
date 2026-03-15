@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { ServerInfo, ServerStatus } from '../types';
+import { Device, ServerInfo, ServerStatus } from '../types';
 
 export const api = {
   // 设置共享目录
@@ -47,5 +47,10 @@ export const api = {
   // 获取服务器地址列表
   getServerAddresses: async (port: number): Promise<ServerInfo[]> => {
     return await invoke('get_server_addresses', { port });
+  },
+
+  // 获取已连接的设备列表
+  getConnectedDevices: async (): Promise<Device[]> => {
+    return await invoke('get_connected_devices');
   },
 };

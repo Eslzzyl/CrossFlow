@@ -24,3 +24,15 @@ export interface ServerStatus {
   sharedDir?: string;
   password?: string;
 }
+
+export type DeviceType = 'mobile' | 'tablet' | 'desktop' | 'unknown';
+
+export interface Device {
+  id: string;
+  ip: string;
+  user_agent: string;
+  device_name: string;
+  device_type: DeviceType;
+  first_seen: number;
+  last_seen: number;
+}

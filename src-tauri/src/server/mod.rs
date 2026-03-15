@@ -2,6 +2,7 @@ pub mod handlers;
 pub mod routes;
 pub mod web_ui;
 
+use crate::services::device_tracker::DeviceTracker;
 use crate::services::file_service::FileService;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
@@ -18,11 +19,12 @@ pub struct HttpServer {
     port: u16,
     shared_dir: PathBuf,
     password: Option<String>,
+    device_tracker: Arc<DeviceTracker>,
 }
 
 impl HttpServer {
-    pub fn new(port: u16, shared_dir: PathBuf, password: Option<String>) -> Self {
-        Self { port, shared_dir, password }
+    pub fn new(port: u16, shared_dir: PathBuf, password: Option<String>, device_tracker: Arc<DeviceTracker>) -> Self {
+        Self { port, shared_dir, password, device_tracker }
     }
 
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -38,7 +40,7 @@ impl HttpServer {
         let body_limit = RequestBodyLimitLayer::new(100 * 1024 * 1024 * 1024);
 
         let app = Router::new()
-            .merge(routes::create_routes(file_service, self.password.clone()))
+            .merge(routes::create_routes(file_service, self.device_tracker.clone(), self.password.clone()))
             .layer(cors)
             .layer(DefaultBodyLimit::disable())
             .layer(body_limit)
@@ -48,14 +50,19 @@ impl HttpServer {
         info!("Starting HTTP server on {}", addr);
 
         let listener = tokio::net::TcpListener::bind(addr).await?;
-        axum::serve(listener, app).await?;
+        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
 
         Ok(())
     }
 }
 
 /// 启动服务器（用于在单独的任务中运行）
-pub async fn run_server(port: u16, shared_dir: PathBuf, password: Option<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_server(
+    port: u16,
+    shared_dir: PathBuf,
+    password: Option<String>,
+    device_tracker: Arc<DeviceTracker>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let file_service = Arc::new(FileService::new(shared_dir));
 
     // CORS 配置
@@ -68,7 +75,7 @@ pub async fn run_server(port: u16, shared_dir: PathBuf, password: Option<String>
     let body_limit = RequestBodyLimitLayer::new(100 * 1024 * 1024 * 1024);
 
     let app = Router::new()
-        .merge(routes::create_routes(file_service, password))
+        .merge(routes::create_routes(file_service, device_tracker, password))
         .layer(cors)
         .layer(DefaultBodyLimit::disable())
         .layer(body_limit)
@@ -80,7 +87,7 @@ pub async fn run_server(port: u16, shared_dir: PathBuf, password: Option<String>
     let listener = tokio::net::TcpListener::bind(addr).await
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
-    axum::serve(listener, app).await
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
     Ok(())

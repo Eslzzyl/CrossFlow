@@ -1,13 +1,15 @@
 use crate::server::handlers::{self, AuthConfig};
+use crate::services::device_tracker::DeviceTracker;
 use crate::services::file_service::FileService;
 use axum::{
     middleware::{self, Next},
     response::Response,
     routing::{delete, get, post},
-    extract::{Request, State},
+    extract::{ConnectInfo, Request, State},
     http::StatusCode,
     Router,
 };
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// 认证中间件
@@ -38,8 +40,32 @@ async fn auth_middleware(
     }
 }
 
+/// 设备追踪中间件
+async fn device_tracking_middleware(
+    State(device_tracker): State<Arc<DeviceTracker>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    request: Request,
+    next: Next,
+) -> Response {
+    // 获取 User-Agent
+    let user_agent = request
+        .headers()
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("Unknown");
+
+    // 记录设备访问
+    let _ = device_tracker.record_visit(addr.ip(), user_agent).await;
+
+    next.run(request).await
+}
+
 /// 创建路由
-pub fn create_routes(file_service: Arc<FileService>, password: Option<String>) -> Router {
+pub fn create_routes(
+    file_service: Arc<FileService>,
+    device_tracker: Arc<DeviceTracker>,
+    password: Option<String>,
+) -> Router {
     let auth_config = Arc::new(AuthConfig::new(password));
 
     // 需要保护的路由
@@ -63,4 +89,5 @@ pub fn create_routes(file_service: Arc<FileService>, password: Option<String>) -
     Router::new()
         .merge(protected_routes)
         .merge(public_routes)
+        .layer(middleware::from_fn_with_state(device_tracker, device_tracking_middleware))
 }

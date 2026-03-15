@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
+use crate::services::device_tracker::DeviceTracker;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileInfo {
@@ -29,6 +31,7 @@ pub struct AppState {
     pub server_handle: std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
     pub server_info: std::sync::Mutex<Option<ServerInfo>>,
     pub server_password: std::sync::Mutex<Option<String>>,
+    pub device_tracker: Arc<DeviceTracker>,
 }
 
 impl AppState {
@@ -38,6 +41,7 @@ impl AppState {
             server_handle: std::sync::Mutex::new(None),
             server_info: std::sync::Mutex::new(None),
             server_password: std::sync::Mutex::new(None),
+            device_tracker: Arc::new(DeviceTracker::new()),
         }
     }
 }

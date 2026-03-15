@@ -28,6 +28,7 @@ pub fn run() {
             commands::generate_qr_code,
             commands::get_server_addresses,
             commands::select_directory,
+            commands::get_connected_devices,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

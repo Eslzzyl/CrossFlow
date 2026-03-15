@@ -1,4 +1,5 @@
 use crate::models::file::{AppState, ServerInfo};
+use crate::services::device_tracker::Device;
 use crate::services::network::{find_available_port, generate_server_info, generate_server_urls};
 use crate::services::qr_service::generate_qr_svg;
 use crate::server::run_server;
@@ -59,6 +60,9 @@ pub async fn start_server(
         }
     }
 
+    // 获取 device_tracker
+    let device_tracker = state.device_tracker.clone();
+
     // 查找可用端口
     let port = match port {
         Some(p) => p,
@@ -75,8 +79,9 @@ pub async fn start_server(
     }
 
     // 启动服务器
+    let device_tracker_clone = device_tracker.clone();
     let handle = tokio::spawn(async move {
-        if let Err(e) = run_server(port, shared_dir, password).await {
+        if let Err(e) = run_server(port, shared_dir, password, device_tracker_clone).await {
             eprintln!("Server error: {}", e);
         }
     });
@@ -101,11 +106,18 @@ pub fn stop_server(state: State<'_, AppState>) -> Result<(), String> {
     if let Some(handle) = server_handle.take() {
         handle.abort();
     }
-    
+
     let mut server_info = state.server_info.lock().map_err(|e| e.to_string())?;
     *server_info = None;
-    
+
     Ok(())
+}
+
+/// 获取已连接的设备列表
+#[tauri::command]
+pub async fn get_connected_devices(state: State<'_, AppState>) -> Result<Vec<Device>, String> {
+    let devices = state.device_tracker.get_active_devices().await;
+    Ok(devices)
 }
 
 /// 获取服务器状态

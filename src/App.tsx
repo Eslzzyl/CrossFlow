@@ -3,6 +3,7 @@ import { useServer } from './hooks/useServer';
 import { DirectorySelector } from './components/DirectorySelector';
 import { ServerControl } from './components/ServerControl';
 import { QRCodeDisplay } from './components/QRCodeDisplay';
+import { DeviceList } from './components/DeviceList';
 import { AlertCircle, Lock } from 'lucide-react';
 import './App.css';
 
@@ -130,6 +131,13 @@ function App() {
         {status.isRunning && status.serverInfo && (
           <div className="card">
             <QRCodeDisplay serverInfo={status.serverInfo} />
+          </div>
+        )}
+
+        {/* 已连接设备 */}
+        {status.isRunning && (
+          <div className="card">
+            <DeviceList isRunning={status.isRunning} />
           </div>
         )}
 
