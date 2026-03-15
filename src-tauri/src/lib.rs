@@ -21,6 +21,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::set_shared_dir,
             commands::get_shared_dir,
+            commands::clear_shared_dir,
             commands::start_server,
             commands::stop_server,
             commands::get_server_status,

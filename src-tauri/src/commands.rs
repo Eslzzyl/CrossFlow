@@ -28,6 +28,14 @@ pub fn get_shared_dir(state: State<'_, AppState>) -> Result<Option<String>, Stri
     Ok(shared_dir.as_ref().map(|p| p.to_string_lossy().to_string()))
 }
 
+/// 清除共享目录
+#[tauri::command]
+pub fn clear_shared_dir(state: State<'_, AppState>) -> Result<(), String> {
+    let mut shared_dir = state.shared_dir.lock().map_err(|e| e.to_string())?;
+    *shared_dir = None;
+    Ok(())
+}
+
 /// 启动 HTTP 服务器
 #[tauri::command]
 pub async fn start_server(

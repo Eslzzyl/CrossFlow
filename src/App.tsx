@@ -12,6 +12,7 @@ function App() {
     loading,
     error,
     setSharedDir,
+    clearSharedDir,
     startServer,
     stopServer,
   } = useServer();
@@ -31,7 +32,7 @@ function App() {
     if (status.isRunning) {
       await stopServer();
     }
-    window.location.reload();
+    await clearSharedDir();
   };
 
   const handleStartServer = async () => {

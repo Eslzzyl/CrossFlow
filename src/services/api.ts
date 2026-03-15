@@ -12,6 +12,11 @@ export const api = {
     return await invoke('get_shared_dir');
   },
 
+  // 清除共享目录
+  clearSharedDir: async (): Promise<void> => {
+    await invoke('clear_shared_dir');
+  },
+
   // 启动服务器
   startServer: async (port?: number, password?: string): Promise<ServerInfo> => {
     return await invoke('start_server', { port, password });

@@ -40,6 +40,21 @@ export function useServer() {
     }
   }, [refreshStatus]);
 
+  // 清除共享目录
+  const clearSharedDir = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await api.clearSharedDir();
+      await refreshStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear shared directory');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshStatus]);
+
   // 启动服务器
   const startServer = useCallback(async (port?: number, password?: string): Promise<ServerInfo> => {
     setLoading(true);
@@ -77,6 +92,7 @@ export function useServer() {
     loading,
     error,
     setSharedDir,
+    clearSharedDir,
     startServer,
     stopServer,
     refreshStatus,
